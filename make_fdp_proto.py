@@ -34,6 +34,9 @@ port_map = {
         "SIDcfgMessage": "9200",
         #"SRSSCalendar": "9321",
         }
+
+#port_map = {"AwosAtisProto": "9322",}
+
 make_conf_template='''name                  : %s
 package               : %s
 proto_file            : %s
@@ -64,6 +67,7 @@ def process_import(f_proto_path):
   if r:
     text=p.sub("", text);
     for im in set(r):
+      shutil.copy(os.path.join(conf['orig_proto_path'], im), conf['proto_path'])
       f2 = open(os.path.join(conf['proto_path'], im))
       text2 = f2.read()
       f2.close()
@@ -108,7 +112,7 @@ def get_new_f_proto(f_proto_path):
     f_proto_path_base = os.path.splitext(f_proto_path)[0]
     keys.sort(key=lambda x: len(findstr(x.lower(), f_proto_path_base.lower())), reverse=True)
     print(keys)
-    return keys[0]
+    return "%s.proto" % keys[0]
   elif len(keys) == 0:
     print("no message found")
     return f_proto_path
