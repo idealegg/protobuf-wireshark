@@ -1,0 +1,7 @@
+name                  : BusinessObjectMessage
+package               : tutorial
+proto_file            : /usr/system/workspace/TowerMSG/tutorial/BusinessObjectMessage.proto
+wireshark_src_dir     : /usr/share/wireshark/wireshark-1.8.10
+wireshark_install_dir : /usr/share/wireshark-1.8.10
+wireshark_version     : 1.8.10
+port_num              : 9323

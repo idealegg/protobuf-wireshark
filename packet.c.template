@@ -1,0 +1,274 @@
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#include <gmodule.h>
+#include <epan/packet.h>
+#include <epan/prefs.h>
+#include <epan/emem.h>
+#include <string.h>
+#include <epan/tvbuff.h>
+#include <epan/tvbuff-int.h>
+#include <epan/dissectors/packet-tcp.h>
+
+/* forward reference */
+
+void proto_register_|PLUGIN_NAME|();
+void proto_reg_handoff_|PLUGIN_NAME|();
+static void dissect_|PLUGIN_NAME|(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree);
+static void dissect_|PLUGIN_NAME|_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree);
+
+
+
+/* Define version if we are not building ethereal statically */
+#ifndef ENABLE_STATIC
+G_MODULE_EXPORT const gchar version[] = "0.0";
+#endif
+
+
+static int proto_|PLUGIN_NAME| = -1;
+static int global_|PLUGIN_NAME|_tcp_ports[] = 
+{ 
+|PORT_NUM| 
+};
+
+static dissector_handle_t |PLUGIN_NAME|_handle;
+
+// Protocol field variables - START
+static int hf_|PLUGIN_NAME| = -1;
+// Protocol field variables - END
+
+int wireshark_pb_process_|PLUGIN_NAME|(void *tree_root, int item_id, void *tvb,  void *buf, int buf_size);
+void wireshark_pb_process_|PLUGIN_NAME|_register_proto( int proto );
+void wireshark_pb_process_|PLUGIN_NAME|_register_subtree( int proto, const char* name,
+                                                int *handle, int ** tree_handle );
+void wireshark_pb_process_|PLUGIN_NAME|_register_field( int proto, int type,
+                                                const char* name, const char * fullName,
+						int *handle );
+/* Register plugin - START */
+#ifndef ENABLE_STATIC
+G_MODULE_EXPORT void
+plugin_register(void) { 
+	/* register the new protocol, protocol fields, and subtrees */
+	if (proto_|PLUGIN_NAME| == -1) { /* execute protocol initialization only once */
+		proto_register_|PLUGIN_NAME|();
+	}
+}
+G_MODULE_EXPORT void
+plugin_reg_handoff(void){
+	proto_reg_handoff_|PLUGIN_NAME|();
+}
+#endif
+void proto_register_|PLUGIN_NAME|(void) {
+
+	module_t *|PLUGIN_NAME|_module;
+	if (proto_|PLUGIN_NAME| == -1) {
+		proto_|PLUGIN_NAME| = proto_register_protocol (
+				"|PLUGIN_NAME|-D ",/* name */
+				"|PLUGIN_NAME|",/* short name */
+				"|PLUGIN_NAME_LOWER|"/* abbrev */
+			);
+		}
+	|PLUGIN_NAME|_module= prefs_register_protocol(proto_|PLUGIN_NAME|, proto_reg_handoff_|PLUGIN_NAME|);
+
+        wireshark_pb_process_|PLUGIN_NAME|_register_proto( proto_|PLUGIN_NAME| );
+}
+
+
+
+void proto_reg_handoff_|PLUGIN_NAME| (void) {
+	static int Initialized=FALSE;
+	unsigned int i = 0;
+
+	if (!Initialized) {
+		|PLUGIN_NAME|_handle = create_dissector_handle(dissect_|PLUGIN_NAME|, proto_|PLUGIN_NAME|);
+
+	  
+	        for( ; i < ( sizeof( global_|PLUGIN_NAME|_tcp_ports ) / sizeof( global_|PLUGIN_NAME|_tcp_ports[0] ) ); i++) {
+		        //dissector_add("udp.port", global_|PLUGIN_NAME|_tcp_ports[i], |PLUGIN_NAME|_handle);
+		        dissector_add("tcp.port", global_|PLUGIN_NAME|_tcp_ports[i], |PLUGIN_NAME|_handle);
+		}
+	}
+}
+/* Register plugin - END */
+
+static void print_buf(void * buf, int buf_size)
+{
+    int i = 0;
+    for (; i < buf_size; i++) {                                                                                   
+          printf("%2x ", ((char *)buf)[i]);
+              }
+                   
+                        
+                            printf("buf size=%d\n", buf_size);
+                                printf("%s\n\n\n", buf);
+}
+
+
+static char *mystrstr(const char *s1, const char *s2, int len1) { 
+    int len2;
+    if (!(len2 = strlen(s2)))
+        return (char *) s1;
+    int i=0;
+    for (; i<len1-len2+1; ++s1,++i)
+    {
+        if (*s1 == *s2 && strncmp(s1, s2, len2) == 0)
+        return (char *) s1;
+    }
+    return NULL;
+}
+
+static int is_header(const char* buf, int buf_size)
+{
+  char * buf2 = mystrstr(buf, "Update[", buf_size);
+  return buf2 != NULL;
+}
+
+static int is_tailer(const char* buf, int buf_size)
+{
+  return buf[buf_size-1] == ']';
+}
+
+typedef struct my_result {
+ void * my_buf;
+ int my_buf_size;
+ } my_result_t;
+
+my_result_t get_values_buf(void* buf, int buf_size)
+{
+  my_result_t ret;
+
+  char * buf2 = mystrstr((char*)buf, "values:", buf_size);
+  if(buf2)
+  {
+    printf("\ninput buf: %d, size: %d\n", buf, buf_size);
+    buf_size -= ((char*)buf2)-((char*)buf) +  strlen("values:") +1;
+    buf = (void*)(buf2 + strlen("values:") );
+    printf("\nGet buf3: %d, %d\n", buf, buf_size);
+    int i=0;
+    for(;i<buf_size;i++) printf("%02X", *(((char*)buf)+i));
+    printf("\n");
+  }
+  ret.my_buf = buf;
+  //ret.my_buf_size = buf_size + 4;
+  ret.my_buf_size = buf_size;
+  return ret;
+}
+
+/* determine PDU length of protocol foo */
+static guint
+get_|PLUGIN_NAME|_message_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset)
+{
+    /* TODO: change this to your needs */
+        guint l =  (guint)tvb_get_ntohl(tvb, offset); /* e.g. length is at offset 4 */
+        //gint32 l = tvb_get_letohl(tvb, offset + 4);
+        printf("get len: %d, offset: %d\n", l, offset);
+        //return offset?0:l;
+        return l + 4;
+        }
+
+static void dissect_|PLUGIN_NAME| (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree) {
+
+ printf("call dissect_\n");
+   int tvb_len = tvb_length(tvb);
+   char* tvb_buf = (char*)tvb_get_ptr(tvb,0,tvb_length(tvb));
+   printf("Current buf: addr [%d], len [%d]\n", tvb, tvb_len);
+ tcp_dissect_pdus(tvb, pinfo, tree, !is_tailer(tvb_buf, tvb_len), 4,
+ //tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 4,
+                      get_|PLUGIN_NAME|_message_len, dissect_|PLUGIN_NAME|_message);
+}
+/* Generate the main dissector function - START */
+static void dissect_|PLUGIN_NAME|_message (tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree) {
+
+  printf("call dissect_ message\n");
+   int tvb_len = tvb_length(tvb);
+   char* tvb_buf = (char*)tvb_get_ptr(tvb,0,tvb_length(tvb));
+   if(!is_header(tvb_buf, tvb_len)) return;
+   printf("Current buf: addr [%d], len [%d]\n", tvb, tvb_len);
+	if (check_col(pinfo->cinfo, COL_PROTOCOL)) {
+		col_set_str(pinfo->cinfo, COL_PROTOCOL, "|PLUGIN_NAME|");
+	}
+
+	/* Clear out stuff in the info column 
+	if(check_col(pinfo->cinfo,COL_INFO)){
+		col_clear(pinfo->cinfo,COL_INFO);
+	}
+  */
+
+	if (tree) { /* we are being asked for details */
+   //print_buf(tvb_buf, tvb_len);
+       my_result_t ret = get_values_buf(tvb_buf, tvb_len);
+//       guchar *decompressed_buffer = (guchar*)wmem_alloc(pinfo->pool, ret.my_buf_size);
+        /* Now re-setup the tvb buffer to have the new data */
+  //      memcpy(decompressed_buffer, ret.my_buf, ret.my_buf_size);
+        tvbuff_t * next_tvb = tvb_new_child_real_data(tvb, ret.my_buf, ret.my_buf_size, ret.my_buf_size);
+        add_new_data_source(pinfo, next_tvb, "Protobuf Data");
+
+       wireshark_pb_process_|PLUGIN_NAME|((void *) tree, hf_|PLUGIN_NAME|,
+       (void *)next_tvb, ret.my_buf, ret.my_buf_size);
+      // (void *)tvb, ret.my_buf, ret.my_buf_size);
+	}
+
+} //dissect_|PLUGIN_NAME|
+/* Generate the main dissector function - END */
+
+
+/** Called from PB to add msg_str to tree_root */
+int wireshark_pb_add_|PLUGIN_NAME|(void* tree_root, void* tvb, int item_id, char* msg_str) {
+  proto_tree_add_none_format ((proto_tree *) tree_root, item_id, (tvbuff_t*) tvb, 0, -1, msg_str);
+  return 0;
+}
+
+void wireshark_pb_process_|PLUGIN_NAME|_register_subtree( int proto, const char* name,
+     int *handle, int ** p_tree_handle )
+{
+   hf_register_info message_info =
+        { handle,
+                { (char*)name,
+                  (char*)name,
+                          FT_NONE,
+                          BASE_NONE,
+                          NULL, 0,
+                          "",
+                          HFILL
+                }
+        };
+  
+  int * tree_handle;
+  
+  hf_register_info *hf_info = malloc(sizeof( hf_register_info ) );  
+
+  *hf_info = message_info;
+
+  proto_register_field_array( proto, hf_info, 1 );
+
+  tree_handle = malloc( sizeof(int) );
+  *tree_handle = -1;
+  proto_register_subtree_array( &tree_handle, 1 );
+
+  *p_tree_handle = tree_handle;
+}
+
+void wireshark_pb_process_|PLUGIN_NAME|_register_field( int proto, int type,
+                                                const char* name, const char * fullName,
+						int *handle )
+{
+   int base = ((type == FT_UINT32) || (type == FT_UINT64) ) ? BASE_HEX : ( (type == FT_INT32) || (type == FT_INT64)) ? BASE_DEC : BASE_NONE;
+   hf_register_info message_info =
+        { handle,
+                { (char*)fullName,
+                  (char*)name,
+                          type,
+                          base,
+                          NULL, 0,
+                          "",
+                          HFILL
+                }
+        };
+
+  hf_register_info *hf_info = malloc(sizeof( hf_register_info ) );
+
+  *hf_info = message_info;
+
+   proto_register_field_array( proto, hf_info, 1 );
+}

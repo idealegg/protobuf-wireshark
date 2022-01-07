@@ -50,3 +50,9 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+/messages
+/runtime
+/*.txt
+/sftp-config.json
+/tags
+/*.conf
