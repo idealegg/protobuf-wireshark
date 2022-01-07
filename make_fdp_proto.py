@@ -18,7 +18,6 @@ conf = {'proto_path': 'messages',
 }
 
 port_map = {
-
         #"AodbJmsTopic": "",
         "AwosAtisProto": "9322",
         #"bcl": "",
@@ -43,6 +42,41 @@ wireshark_install_dir : %s
 wireshark_version     : %s
 port_num              : %s'''
 
+def findstr(str1,str2):
+  count = 0
+  length = len(str1)
+  for sublen in range(length,0,-1):
+    for start in range(0,length - sublen + 1):
+      count += 1
+      substr = str1[start:start+sublen]
+      if substr and str2.find(substr) > -1:
+        print('count=%s,  subStringLen:%s'  % (count,sublen))
+        return substr
+  else:
+    return ""
+
+def process_import(f_proto_path):
+  f=open(os.path.join(conf['proto_path'], f_proto_path))
+  text = f.read()
+  f.close()
+  p=re.compile(r'\bimport\s+"([^\s"]+)"s*;')
+  r=p.findall(text)
+  if r:
+    text=p.sub("", text);
+    for im in set(r):
+      f2 = open(os.path.join(conf['proto_path'], im))
+      text2 = f2.read()
+      f2.close()
+      r2 = re.compile(r'\b(message|enum)\s+[\w_]+\s*\{').search(text2)
+      if r2:
+        text += "\n"+text2[r2.start():]
+        r3 = re.compile(r'\bpackage\s+([\w_]+)\s*;').search(text2)
+        if r3:
+          text = re.compile(r'\b'+r3.group(1)+r'.').sub('', text)
+  f=open(os.path.join(conf['proto_path'], f_proto_path), 'w')
+  f.write(text)
+  f.close()
+
 def replace_str_in_file(f_path, s_targets, s_replaces):
   f=open(f_path)
   text = f.read()
@@ -53,7 +87,7 @@ def replace_str_in_file(f_path, s_targets, s_replaces):
     s_replace = s_replaces[i]
     if p.search(text):
       print "replace "+s_target+" to "+s_replace+ " in file " + f_path
-      text=p.sub(s_replace, text);
+      text=p.sub(s_replace, text)
     else:
       print "str "+s_target+" not in file " + f_path
   f=open(f_path,"w")
@@ -64,14 +98,17 @@ def get_new_f_proto(f_proto_path):
   f=open(os.path.join(conf['proto_path'], f_proto_path))
   text = f.read()
   f.close()
-  p=re.compile(r'\s*message\s+(\w+)\s*{');
+  p=re.compile(r'\bmessage\s+([\w_]+)\s*{')
   r=p.findall(text)
   keys = filter(lambda x: len(re.compile(r'\b'+x+r'\b').findall(text)) == 1, set(r))
   if len(keys) > 1:
     print("too much message:")
     print(r)
     print(map(lambda x: "%s: %s" % (x, len(re.compile(r'\b'+x+r'\b').findall(text))), set(r)))
-    return f_proto_path
+    f_proto_path_base = os.path.splitext(f_proto_path)[0]
+    keys.sort(key=lambda x: len(findstr(x.lower(), f_proto_path_base.lower())), reverse=True)
+    print(keys)
+    return keys[0]
   elif len(keys) == 0:
     print("no message found")
     return f_proto_path
@@ -118,14 +155,15 @@ if __name__ == "__main__":
         f_proto_base = "%s_" % f_proto_base
       package_names.add(f_proto_base)
       conf['package_name'] = f_proto_base
+      process_import(f_proto)
       t_strs = [r"package [\w.]+;"]
       r_strs = ["package %s;" % conf['package_name']]
-      if f_proto.startswith('ResectorizationTopic.'):
+      '''if f_proto.startswith('ResectorizationTopic.'):
         t_strs.extend([r'\bSectorType\b', r'\bSector\b', r'\bSNAPSHOT\b'])
         r_strs.extend(['SectorType2', 'Sector2', 'SNAPSHOT2'])
       elif f_proto.startswith('GcfTopic.'):
         t_strs.extend([r'\bUpdateKind\b'])
-        r_strs.extend(['UpdateKind2'])
+        r_strs.extend(['UpdateKind2'])'''
       replace_str_in_file(os.path.join(conf['proto_path'], f_proto), 
                           t_strs,
                           r_strs)

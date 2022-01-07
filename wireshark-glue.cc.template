@@ -21,19 +21,7 @@ static HandleMap* handleMap = NULL;
 
 static void * _tvb = NULL;
 
-static const char ARRAY_FORMAT[] = "%s[%d]";
-
-/*char *mystrstr(const char *s1, const char *s2, int len1) { 
-    int len2;
-    if (!(len2 = strlen(s2)))
-        return (char *) s1;
-    for (int i=0; i<len1-len2+1; ++s1,++i)
-    {
-        if (*s1 == *s2 && strncmp(s1, s2, len2) == 0)
-        return (char *) s1;
-    }
-    return NULL;
-}*/   
+static const char ARRAY_FORMAT[] = "%s[%d]";  
 
 /**
   * @param buf The message contents
@@ -44,15 +32,13 @@ static const char ARRAY_FORMAT[] = "%s[%d]";
 int wireshark_pb_process_|PLUGIN_NAME|(proto_tree* tree_root, int item_id, tvbuff_t* tvb, void* buf, int buf_size) {
 
   |PACKAGE||PLUGIN_NAME| msg;
-  //if (!msg.ParseFromArray((char *) buf, buf_size)) {
+
   if (!msg.ParseFromArray((char *) buf, buf_size)) {
     DBG_ERR( "Failed to parse message." );
     
     /*for (int i=0; i < buf_size; i++) {
       printf("%2x ", ((char *)buf)[i]);
     }
-    
-    
     printf("buf size=%d\n", buf_size);
     printf("%s\n\n\n", buf);*/
     
