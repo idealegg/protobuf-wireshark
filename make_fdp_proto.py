@@ -9,12 +9,9 @@ import shutil
 conf = {'proto_path': 'messages',
         'orig_proto_path': '/usr/system/workspace/TowerMSG/messages',
         'protoc': '/usr/system/workspace/TowerCOMM/ext/protoc-i386',
-        'conf_template': 'fdp.conf.template',
         'wireshark_src_dir': '/usr/share/wireshark/wireshark-1.8.10',
         'wireshark_install_dir': '/usr/share/wireshark-1.8.10',
         'wireshark_version': '1.8.10',
-        'package_name': 'tutorial',
-        'orig_package_name': 'com.thales.tower.comm',
 }
 
 port_map = {
@@ -28,11 +25,11 @@ port_map = {
         #"FpmFlightPlanTopic": "",
         "FrequencySectorTopic": "9324",
         "GcfTopic": "9123",
-        #"GServer_CwpMsg": "",  # trs ? route?
+        "GServer_CwpMsg": "28000",  # trs 
         #"IntegerTopic": "",
         "ResectorizationTopic": "9100",
         "SIDcfgMessage": "9200",
-        #"SRSSCalendar": "9321",
+        "SRSSCalendar": "9321",
         }
 
 #port_map = {"AwosAtisProto": "9322",}
@@ -58,16 +55,25 @@ def findstr(str1,str2):
   else:
     return ""
 
-def process_import(f_proto_path):
-  f=open(os.path.join(conf['proto_path'], f_proto_path))
+def read_f(f_path):
+  f=open(f_path)
   text = f.read()
   f.close()
+  return text
+
+def write_f(f_path, text):
+  f=open(f_path, 'w')
+  f.write(text)
+  f.close()
+
+def process_import(text):
   p=re.compile(r'\bimport\s+"([^\s"]+)"s*;')
   r=p.findall(text)
   if r:
     text=p.sub("", text);
     for im in set(r):
-      shutil.copy(os.path.join(conf['orig_proto_path'], im), conf['proto_path'])
+      if not os.path.isfile(os.path.join(conf['proto_path'], im)):
+        shutil.copy(os.path.join(conf['orig_proto_path'], im), conf['proto_path'])
       f2 = open(os.path.join(conf['proto_path'], im))
       text2 = f2.read()
       f2.close()
@@ -77,14 +83,9 @@ def process_import(f_proto_path):
         r3 = re.compile(r'\bpackage\s+([\w_]+)\s*;').search(text2)
         if r3:
           text = re.compile(r'\b'+r3.group(1)+r'.').sub('', text)
-  f=open(os.path.join(conf['proto_path'], f_proto_path), 'w')
-  f.write(text)
-  f.close()
+  return text
 
-def replace_str_in_file(f_path, s_targets, s_replaces):
-  f=open(f_path)
-  text = f.read()
-  f.close()
+def replace_str_in_file(text, s_targets, s_replaces, f_path):
   modifiedText = text
   for i, s_target in enumerate(s_targets):
     p=re.compile(s_target);
@@ -94,14 +95,9 @@ def replace_str_in_file(f_path, s_targets, s_replaces):
       text=p.sub(s_replace, text)
     else:
       print "str "+s_target+" not in file " + f_path
-  f=open(f_path,"w")
-  f.write(text)
-  f.close()
+  return text
 
-def get_new_f_proto(f_proto_path):
-  f=open(os.path.join(conf['proto_path'], f_proto_path))
-  text = f.read()
-  f.close()
+def get_new_f_proto(text, f_proto_path):
   p=re.compile(r'\bmessage\s+([\w_]+)\s*{')
   r=p.findall(text)
   keys = filter(lambda x: len(re.compile(r'\b'+x+r'\b').findall(text)) == 1, set(r))
@@ -146,7 +142,7 @@ def prepare_make_conf(f_proto_path, old_f_proto_path):
 
 
 if __name__ == "__main__":
-  if not conf['proto_path'].startswith('/'):
+  if not os.path.isabs(conf['proto_path']):
     conf['proto_path'] = os.path.join(os.getcwd(), conf['proto_path'])
   if not os.path.isdir(conf['proto_path']):
     os.mkdir(conf['proto_path'])
@@ -159,7 +155,9 @@ if __name__ == "__main__":
         f_proto_base = "%s_" % f_proto_base
       package_names.add(f_proto_base)
       conf['package_name'] = f_proto_base
-      process_import(f_proto)
+      f_proto_path = os.path.join(conf['proto_path'], f_proto)
+      text = read_f(f_proto_path)
+      text = process_import(text)
       t_strs = [r"package [\w.]+;"]
       r_strs = ["package %s;" % conf['package_name']]
       '''if f_proto.startswith('ResectorizationTopic.'):
@@ -168,12 +166,14 @@ if __name__ == "__main__":
       elif f_proto.startswith('GcfTopic.'):
         t_strs.extend([r'\bUpdateKind\b'])
         r_strs.extend(['UpdateKind2'])'''
-      replace_str_in_file(os.path.join(conf['proto_path'], f_proto), 
+      text = replace_str_in_file(text, 
                           t_strs,
-                          r_strs)
-      new_f_proto = get_new_f_proto(f_proto)
+                          r_strs,
+                          f_proto_path)
+      write_f(f_proto_path, text)
+      new_f_proto = get_new_f_proto(text, f_proto)
       if new_f_proto != f_proto:
-        os.rename(os.path.join(conf['proto_path'], f_proto), os.path.join(conf['proto_path'], new_f_proto))
+        os.rename(f_proto_path, os.path.join(conf['proto_path'], new_f_proto))
       generate_cpp(new_f_proto)
       prepare_make_conf(new_f_proto, f_proto)
       os.system('./make_wireshark_plugin.py %s.conf' % os.path.splitext(new_f_proto)[0])
